@@ -21,6 +21,7 @@ import (
 	"github.com/rackspace/gophercloud/openstack/compute/v2/extensions/adminactions"
 	"github.com/rackspace/gophercloud/openstack/compute/v2/servers"
 	"github.com/rackspace/gophercloud/pagination"
+	"github.com/stackanetes/kubernetes-entrypoint/util/command"
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
 	"time"
 )
@@ -33,17 +34,19 @@ const (
 type Node struct {
 	client   *gophercloud.ServiceClient
 	body     map[string]string
+	confPath string
 	hostname string
 	vms      *[]servers.Server
 	Enabled  bool
 }
 
 // New creates a Openstack node.
-func New() (*Node, error) {
+func New(confPath string) (*Node, error) {
 	var n Node
 	var err error
 
 	n.Enabled = true
+	n.confPath = confPath
 	n.hostname, err = GetMyHostname()
 	if err != nil {
 		return &n, fmt.Errorf("Cannot retrieve hostname: %v", err)
@@ -51,7 +54,7 @@ func New() (*Node, error) {
 
 	n.body = map[string]string{"binary": "nova-compute", "host": n.hostname}
 
-	n.client, err = createOpenstackClient()
+	n.client, err = createOpenstackClient(n.confPath)
 	if err != nil {
 		return &n, fmt.Errorf("Cannot create openstack client: %v", err)
 	}

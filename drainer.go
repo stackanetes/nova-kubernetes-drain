@@ -17,17 +17,18 @@ import (
 	"flag"
 	"os"
 
-	"github.com/stackanetes/evacuator/kube_watcher"
-	"github.com/stackanetes/evacuator/node"
+	"github.com/stackanetes/nova-kubernetes-drain/kube_watcher"
+	"github.com/stackanetes/nova-kubernetes-drain/node"
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
 )
 
 func main() {
-	daemon := flag.Bool("daemon", false, "without this run once")
+	daemon := flag.Bool("daemon", false, "run as a daemon")
+	configPath := flag.String("config-path", "config.yaml", "path to configuration file")
 	flag.Parse()
 
 	if !*daemon {
-		n, err := node.New()
+		n, err := node.New(*configPath)
 		if err != nil {
 			logger.Error.Printf("Cannot create Node: %v\n", err)
 			os.Exit(1)
@@ -38,7 +39,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		kw, err := kubewatcher.New()
+		kw, err := kubewatcher.New(*configPath)
 		if err != nil {
 			logger.Error.Printf("I cannot create eventWatcher: %v", err)
 			os.Exit(1)

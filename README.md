@@ -5,9 +5,9 @@
 [![Go Report Card](https://goreportcard.com/badge/stackanetes/nova-kubernetes-drain "Go Report Card")](https://goreportcard.com/report/stackanetes/nova-kubernetes-drain)
 
 The main goal of Nova-kubernetes-drain is to perform evacuation of [Openstack] compute node when [Kubernetes] node is being drained.
-Nova-kubernetes-drain is one of container of the compute-node pod deployed via [Stackanetes].
+Nova-kubernetes-drain should be deployed as a [Daemonset] via [Stackanetes].
 
-Nova-kubernetes-drain can be run as a daemon or can perform single evacuation. Those two modes are simple configure by command line flag.
+Nova-kubernetes-drain can be run as a daemon or as one-off task. Those two modes are simple configure by command line flag.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ Nova-kubernetes-drain based on two clients:
   1. [Kubernetes] client: https://godoc.org/k8s.io/kubernetes/pkg/client/unversioned
   2. [Openstack] client*: http://gophercloud.io/docs/compute/
 
-  \* Rackscale client is deprecated, but new [client] currently does not support [live-migration]. Client should be switched when new client supports [live-migration]. 
+  \* Rackspace client is deprecated, but new [client] currently does not support [live-migration]. Client should be switched when new client supports [live-migration]. 
 
 ## Configuration file
 
@@ -23,7 +23,7 @@ Nova-kubernetes-drain requires config.yaml. Configuration file should contain al
 config.yaml example:
 
 ```
-IdentityEndpoint: "http://keystone-api:35357/v3/"
+IdentityEndpoint: "http://keystone-api:5000/v3/"
 Username: "admin"
 Password: "mysupersecretpassword"
 TenantName: "admin"
@@ -37,6 +37,7 @@ DomainID: "default"
 [uncordon]: http://kubernetes.io/docs/user-guide/kubectl/kubectl_uncordon/
 [drain]: http://kubernetes.io/docs/user-guide/kubectl/kubectl_drain/
 [client]: https://github.com/gophercloud/gophercloud
+[daemonset]: http://kubernetes.io/docs/admin/daemons/
 
 ## Run once
 
@@ -68,9 +69,9 @@ Lifecycle of the application:
  1. Load [Openstack] Authorisation variables from file.
  2. Hook to [Kubernetes] event stream and wait for proper events.
  3. According to event message, trigger proper command:
-    1. [Drain] event received:
+    1. Unschedulable event received:
        1. Disable nova-compute in [Openstack].
        2. Identify all VMs on this nova-compute node.
        3. Trigger [live-migration] for each of those VMs.
-    2. [Uncordon] event received:
+    2. Schedulable event received:
        1. Enable nova-compute in [Openstack].

@@ -27,12 +27,8 @@ import (
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
 )
 
-const (
-	configFileName = "config.yaml"
-)
-
-func loadConfigs() (config map[string]string, err error) {
-	absFP, err := filepath.Abs(configFileName)
+func loadConfigs(confPath string) (config map[string]string, err error) {
+	absFP, err := filepath.Abs(confPath)
 	if err != nil {
 		logger.Error.Println()
 		return config, fmt.Errorf("Cannot retrieve absolute path for config file.")
@@ -50,8 +46,8 @@ func loadConfigs() (config map[string]string, err error) {
 	return
 }
 
-func createOpenstackClient() (client *gophercloud.ServiceClient, err error) {
-	config, err := loadConfigs()
+func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, err error) {
+	config, err := loadConfigs(confPath)
 	if err != nil {
 		return client, fmt.Errorf("Cannot load variables required to create openstack client.")
 	}
@@ -105,4 +101,3 @@ func GetMyHostname() (string, error) {
 	}
 	return hostname, nil
 }
-

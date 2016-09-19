@@ -16,7 +16,7 @@ package kubewatcher
 import (
 	"fmt"
 
-	"github.com/stackanetes/evacuator/node"
+	"github.com/stackanetes/nova-kubernetes-drain/node"
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
 	"k8s.io/kubernetes/pkg/api"
 	cl "k8s.io/kubernetes/pkg/client/unversioned"
@@ -32,7 +32,7 @@ type EventWatcher struct {
 }
 
 // New creates new kubernetes event watcher.
-func New() (ew EventWatcher, err error) {
+func New(confPath string) (ew EventWatcher, err error) {
 	ew.Client, err = cl.NewInCluster()
 	if err != nil {
 		return ew, fmt.Errorf("Cannot create client because of %v", err)
@@ -48,7 +48,7 @@ func New() (ew EventWatcher, err error) {
 		return ew, fmt.Errorf("Cannot recieve hostname: %v", err)
 	}
 
-	ew.Node, err = node.New()
+	ew.Node, err = node.New(confPath)
 	if err != nil {
 		return ew, fmt.Errorf("Cannot create node object: %v", err)
 	}
