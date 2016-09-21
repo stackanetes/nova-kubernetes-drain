@@ -11,19 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package node
+package nova
 
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rackspace/gophercloud"
 	"github.com/rackspace/gophercloud/openstack/compute/v2/extensions/adminactions"
 	"github.com/rackspace/gophercloud/openstack/compute/v2/servers"
 	"github.com/rackspace/gophercloud/pagination"
-	"github.com/stackanetes/kubernetes-entrypoint/util/command"
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
-	"time"
 )
 
 const (
@@ -31,39 +30,37 @@ const (
 )
 
 // Node is the implementation of a openstack hypervisor.\
-type Node struct {
-	client   *gophercloud.ServiceClient
+type Hypervisor struct {
 	body     map[string]string
+	client   *gophercloud.ServiceClient
 	confPath string
 	hostname string
 	vms      *[]servers.Server
 	Enabled  bool
 }
 
-// New creates a Openstack node.
-func New(confPath string) (*Node, error) {
-	var n Node
-	var err error
-
-	n.Enabled = true
-	n.confPath = confPath
-	n.hostname, err = GetMyHostname()
+// New creates a OpenStack Hypervisor.
+func New(confPath string) (*Hypervisor, error) {
+	hostname, err := GetMyHostname()
 	if err != nil {
-		return &n, fmt.Errorf("Cannot retrieve hostname: %v", err)
+		return nil, fmt.Errorf("Cannot retrieve hostname: %v", err)
+	}
+	client, err := createOpenstackClient(confPath)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot create openstack client: %v", err)
 	}
 
-	n.body = map[string]string{"binary": "nova-compute", "host": n.hostname}
-
-	n.client, err = createOpenstackClient(n.confPath)
-	if err != nil {
-		return &n, fmt.Errorf("Cannot create openstack client: %v", err)
+	return &Hypervisor{
+		body: map[string]string{"binary": "nova-compute", "host": hostname},
+		client:  client,
+		confPath: confPath,
+		hostname: hostname,
+		Enabled: true,
 	}
-
-	return &n, err
 }
 
-// Disable live-migrating all VMs for node and change node state to disable
-func (n *Node) Disable() (err error) {
+// Disable Live migrate all VMs out of node and disable scheduling on it.
+func (n *Hypervisor) Disable() (err error) {
 	url := n.client.ServiceURL("os-services", "disable")
 	resp, err := n.client.Request("PUT", url, gophercloud.RequestOpts{
 		JSONBody: n.body,
@@ -84,7 +81,7 @@ func (n *Node) Disable() (err error) {
 }
 
 // Enable change node state to enable
-func (n *Node) Enable() error {
+func (n *Hypervisor) Enable() error {
 	url := n.client.ServiceURL("os-services", "enable")
 	resp, err := n.client.Request("PUT", url, gophercloud.RequestOpts{
 		JSONBody: n.body,
@@ -100,7 +97,7 @@ func (n *Node) Enable() error {
 	return nil
 }
 
-func (n *Node) migrateVMs() (err error) {
+func (n *Hypervisor) migrateVMs() (err error) {
 	var wg sync.WaitGroup
 	err = n.updateVMList()
 	if err != nil {
@@ -131,7 +128,7 @@ func (n *Node) migrateVMs() (err error) {
 	return
 }
 
-func (n *Node) updateVMList() (err error) {
+func (n *Hypervisor) updateVMList() (err error) {
 	pager := servers.List(n.client, servers.ListOpts{
 		Host: n.hostname,
 	})

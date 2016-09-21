@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package node
+
+package nova
 
 import (
 	"fmt"
@@ -21,10 +22,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/rackspace/gophercloud"
 	"github.com/rackspace/gophercloud/openstack"
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
+)
+
+const (
+	interval = 2
 )
 
 func loadConfigs(confPath string) (config map[string]string, err error) {
@@ -64,8 +70,15 @@ func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, 
 	if err != nil {
 		return client, fmt.Errorf("Cannot create openstack provider: %v", err)
 	}
-
-	client, err = openstack.NewComputeV2(provider, gophercloud.EndpointOpts{})
+	for a := 1; a < 4; a++ {
+		client, err = openstack.NewComputeV2(provider, gophercloud.EndpointOpts{})
+		if err == nil {
+			return
+		}
+		logger.Warning.Printf("Attempt: %i. Cannot initalize new client.\n", a)
+		time.Sleep(a**2 * interval * time.Second)
+		// TODO(DTadrzak): Should break the loop if receive 401 code status
+	}
 	if err != nil {
 		return client, fmt.Errorf("Cannot create openstack client: %v", err)
 	}
@@ -76,7 +89,7 @@ func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, 
 func GetMyIPAddress() (string, error) {
 	iface := os.Getenv("INTERFACE_NAME")
 	if iface == "" {
-		return "", fmt.Errorf("Environment variable INTERFACE_NAME not set")
+		return "", fmt.Errorf("Environment variable INTERFACE_NAME not set.")
 	}
 
 	intface, err := net.InterfaceByName(iface)

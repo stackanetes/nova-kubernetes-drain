@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package main
 
 import (
@@ -18,7 +19,7 @@ import (
 	"os"
 
 	"github.com/stackanetes/nova-kubernetes-drain/kube_watcher"
-	"github.com/stackanetes/nova-kubernetes-drain/node"
+	"github.com/stackanetes/nova-kubernetes-drain/nova"
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
 )
 
@@ -28,13 +29,12 @@ func main() {
 	flag.Parse()
 
 	if !*daemon {
-		n, err := node.New(*configPath)
+		h, err := nova.New(*configPath)
 		if err != nil {
 			logger.Error.Printf("Cannot create Node: %v\n", err)
 			os.Exit(1)
 		}
-		err = n.Disable()
-		if err != nil {
+		if err = h.Disable(); err != nil {
 			logger.Error.Printf("Cannot disable node: %v\n", err)
 			os.Exit(1)
 		}
@@ -44,8 +44,7 @@ func main() {
 			logger.Error.Printf("I cannot create eventWatcher: %v", err)
 			os.Exit(1)
 		}
-		err = kw.Watch()
-		if err != nil {
+		if err = kw.Watch(); err != nil {
 			logger.Error.Printf("Error druing watching: %v", err)
 			os.Exit(1)
 		}

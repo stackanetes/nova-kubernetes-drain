@@ -79,17 +79,14 @@ func (ew EventWatcher) Watch() error {
 
 		if node.Spec.Unschedulable && ew.Node.Enabled {
 			logger.Info.Printf("ew.Node.Enabled: %b", ew.Node.Enabled)
-			err = ew.Node.Disable()
-			if err != nil {
+			if err = ew.Node.Disable(); err != nil {
 				return err
 			}
 		} else if !node.Spec.Unschedulable && !ew.Node.Enabled {
 			logger.Info.Printf("ew.Node.Enabled: %b", ew.Node.Enabled)
-			err = ew.Node.Enable()
-			if err != nil {
+			if err = ew.Node.Enable(); err != nil {
 				return err
 			}
-
 		}
 	}
 	return err
