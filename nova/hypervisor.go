@@ -56,7 +56,11 @@ func New(confPath string) (*Hypervisor, error) {
 		confPath: confPath,
 		hostname: hostname,
 		Enabled: true,
-	}
+	}, nil
+}
+
+func (n *Hypervisor) Refresh() (err error) {
+	url := n.client.ServiceURL("os-services")
 }
 
 // Disable Live migrate all VMs out of node and disable scheduling on it.

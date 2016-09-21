@@ -16,7 +16,6 @@ package kubewatcher
 import (
 	"fmt"
 
-	"github.com/stackanetes/nova-kubernetes-drain/node"
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
 	"k8s.io/kubernetes/pkg/api"
 	cl "k8s.io/kubernetes/pkg/client/unversioned"
@@ -26,31 +25,20 @@ import (
 // EventWatcher is the implementation of kubernetes event watcher
 type EventWatcher struct {
 	Client    *cl.Client
-	MyIP      string
-	Hostname  string
-	Node      *node.Node
+}
+
+type Selector interface {
+	RunNode(*api.Node, watch.EventType) error
+	RunPod(*api.Pod, watch.EventType) error
+	RunReplicationController(*api.ReplicationController, watch.EventType) error
+	RunService(*api.Service, watch.EventType) error
 }
 
 // New creates new kubernetes event watcher.
-func New(confPath string) (ew EventWatcher, err error) {
+func New() (ew EventWatcher, err error) {
 	ew.Client, err = cl.NewInCluster()
 	if err != nil {
 		return ew, fmt.Errorf("Cannot create client because of %v", err)
-	}
-
-	ew.MyIP, err = node.GetMyIPAddress()
-	if err != nil {
-		return ew, fmt.Errorf("Cannot recieve ip address %v", err)
-	}
-
-	ew.Hostname, err = node.GetMyHostname()
-	if err != nil {
-		return ew, fmt.Errorf("Cannot recieve hostname: %v", err)
-	}
-
-	ew.Node, err = node.New(confPath)
-	if err != nil {
-		return ew, fmt.Errorf("Cannot create node object: %v", err)
 	}
 
 	logger.Info.Println("EventWatcher successfully created.")
@@ -59,7 +47,7 @@ func New(confPath string) (ew EventWatcher, err error) {
 
 // Watch starts listening kubernetes event stream.
 // During watching if particular events found, execute proper method.
-func (ew EventWatcher) Watch() error {
+func (ew EventWatcher) Watch(sel Selector) error {
 	var err error
 	// Prepare events watcher.
 	watcher, err := ew.Client.Nodes().Watch(api.ListOptions{})
@@ -69,24 +57,41 @@ func (ew EventWatcher) Watch() error {
 	logger.Info.Println("Watcher created.")
 
 	for event := range watcher.ResultChan() {
-		node, ok := event.Object.(*api.Node)
-		if !ok { continue }
 
-		if event.Type != watch.Modified { continue }
-
-		// Check if event belongs to node. Host can use hostname or IP address.
-		if node.Name != ew.MyIP && node.Name != ew.Hostname { continue }
-
-		if node.Spec.Unschedulable && ew.Node.Enabled {
-			logger.Info.Printf("ew.Node.Enabled: %b", ew.Node.Enabled)
-			if err = ew.Node.Disable(); err != nil {
+		n, ok := event.Object.(*api.Node)
+		if ok {
+			err = sel.RunNode(n, event.Type)
+			if err != nil {
 				return err
 			}
-		} else if !node.Spec.Unschedulable && !ew.Node.Enabled {
-			logger.Info.Printf("ew.Node.Enabled: %b", ew.Node.Enabled)
-			if err = ew.Node.Enable(); err != nil {
+			continue
+		}
+
+		p, ok := event.Object.(*api.Pod)
+		if ok {
+			err = sel.RunPod(p, event.Type)
+			if err != nil {
 				return err
 			}
+			continue
+		}
+
+		rc, ok := event.Object.(*api.ReplicationController)
+		if ok {
+			err = sel.RunReplicationController(rc, event.Type)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		s, ok := event.Object.(*api.Service)
+		if ok {
+			err = sel.RunService(s, event.Type)
+			if err != nil {
+				return err
+			}
+			continue
 		}
 	}
 	return err

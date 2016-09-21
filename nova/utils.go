@@ -29,10 +29,6 @@ import (
 	"github.com/stackanetes/kubernetes-entrypoint/logger"
 )
 
-const (
-	interval = 2
-)
-
 func loadConfigs(confPath string) (config map[string]string, err error) {
 	absFP, err := filepath.Abs(confPath)
 	if err != nil {
@@ -55,7 +51,7 @@ func loadConfigs(confPath string) (config map[string]string, err error) {
 func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, err error) {
 	config, err := loadConfigs(confPath)
 	if err != nil {
-		return client, fmt.Errorf("Cannot load variables required to create openstack client.")
+		return nil, fmt.Errorf("Cannot load variables required to create openstack client.")
 	}
 
 	ao := gophercloud.AuthOptions{
@@ -76,7 +72,7 @@ func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, 
 			return
 		}
 		logger.Warning.Printf("Attempt: %i. Cannot initalize new client.\n", a)
-		time.Sleep(a**2 * interval * time.Second)
+		time.Sleep(interval * time.Second)
 		// TODO(DTadrzak): Should break the loop if receive 401 code status
 	}
 	if err != nil {
