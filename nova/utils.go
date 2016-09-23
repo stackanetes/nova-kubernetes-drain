@@ -1,27 +1,15 @@
-// Copyright 2016 Intel Corporation
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package nova
 
 import (
+	"encoding/json"
 	"fmt"
 	"gopkg.in/yaml.v2"
+	"io"
 	"io/ioutil"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rackspace/gophercloud"
@@ -40,12 +28,18 @@ func loadConfigs(confPath string) (config map[string]string, err error) {
 	if err != nil {
 		return config, fmt.Errorf("Cannot load config file.")
 	}
-	err = yaml.Unmarshal(yamlFile, &config)
-	if err != nil {
+	if err = yaml.Unmarshal(yamlFile, &config); err != nil {
 		return config, fmt.Errorf("Invalid format of config file.")
 	}
 	logger.Info.Printf("Configuration loaded from %s.\n", absFP)
+
 	return
+}
+
+func getJson(body io.ReadCloser, target interface{}) error {
+	defer body.Close()
+
+	return json.NewDecoder(body).Decode(target)
 }
 
 func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, err error) {
@@ -67,46 +61,45 @@ func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, 
 		return client, fmt.Errorf("Cannot create openstack provider: %v", err)
 	}
 	for a := 1; a < 4; a++ {
+		// TODO(DTadrzak): Should break the loop if receive status code == 401
 		client, err = openstack.NewComputeV2(provider, gophercloud.EndpointOpts{})
 		if err == nil {
 			return
 		}
-		logger.Warning.Printf("Attempt: %i. Cannot initalize new client.\n", a)
-		time.Sleep(interval * time.Second)
-		// TODO(DTadrzak): Should break the loop if receive 401 code status
+		logger.Warning.Printf("Attempt: %d. Cannot initalize new client.\n", a)
+		time.Sleep(retryInterval * time.Second)
 	}
-	if err != nil {
-		return client, fmt.Errorf("Cannot create openstack client: %v", err)
+
+	return client, fmt.Errorf("Cannot create openstack client: %v", err)
+}
+
+// Func based on http://stackoverflow.com/questions/32840687/timeout-for-waitgroup-wait
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return false
+	case <-time.After(timeout):
+		return true
 	}
-	return
 }
 
 // GetMyIPAddress returns ip address
+// Based on http://stackoverflow.com/questions/23558425
 func GetMyIPAddress() (string, error) {
-	iface := os.Getenv("INTERFACE_NAME")
-	if iface == "" {
-		return "", fmt.Errorf("Environment variable INTERFACE_NAME not set.")
-	}
-
-	intface, err := net.InterfaceByName(iface)
+	conn, err := net.Dial("udp", "keystone-api:5000")
 	if err != nil {
-		return "", fmt.Errorf("Cannot get iface: %v", err)
+		return "", fmt.Errorf("Cannot define ip address: %v", err)
 	}
+	defer conn.Close()
 
-	address, err := intface.Addrs()
-	if err != nil || len(address) == 0 {
-		return "", fmt.Errorf("Cannot get ip: %v", err)
-	}
+	localAddr := conn.LocalAddr().String()
+	idx := strings.LastIndex(localAddr, ":")
 
-	// Split in order to remove subnet
-	return strings.Split(address[0].String(), "/")[0], nil
+	return localAddr[0:idx], nil
 }
 
-// GetMyHostname returns hostname
-func GetMyHostname() (string, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("Environment variable HOSTNAME not set")
-	}
-	return hostname, nil
-}

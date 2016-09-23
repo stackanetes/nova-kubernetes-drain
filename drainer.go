@@ -1,29 +1,15 @@
-// Copyright 2016 Intel Corporation
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
+	"github.com/stackanetes/kubernetes-entrypoint/logger"
 	"github.com/stackanetes/nova-kubernetes-drain/kube_watcher"
 	"github.com/stackanetes/nova-kubernetes-drain/nova"
-	"github.com/stackanetes/kubernetes-entrypoint/logger"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/watch"
-	"fmt"
 )
 
 type drainer struct {
@@ -38,7 +24,7 @@ func newDrainer(hyper *nova.Hypervisor) (drainer, error){
 		return drainer{}, err
 	}
 
-	hostname, err := nova.GetMyHostname()
+	hostname, err := os.Hostname()
 	if err != nil {
 		return drainer{}, err
 	}
@@ -52,20 +38,35 @@ func newDrainer(hyper *nova.Hypervisor) (drainer, error){
 
 
 func (d drainer) RunNode(node *api.Node, event watch.EventType) (err error) {
+	logger.Info.Println("Node Event found.")
 	if event != watch.Modified { return nil }
 
 	// Check if event belongs to node. Host can use hostname or IP address.
 	if node.Name != d.myIP && node.Name != d.hostname { return nil }
+	logger.Info.Println("Event belongs to node.")
 
-	if node.Spec.Unschedulable {
+	// Refresh state
+	if err = d.hypervisor.RefreshState(); err != nil {
+		return fmt.Errorf("Cannot update hypervisior state: %v", err)
+	}
+
+	if node.Spec.Unschedulable && d.hypervisor.Enabled {
+		logger.Info.Println("Disabling hypervisor.")
 		if err = d.hypervisor.Disable(); err != nil {
 			return err
 		}
-	} else if !node.Spec.Unschedulable {
+		if err = d.hypervisor.MigrateVMs(); err != nil {
+			logger.Warning.Println("Cannot migrate VMs: %v", err)
+		}
+	} else if !node.Spec.Unschedulable && !d.hypervisor.Enabled {
+		logger.Info.Println("Enabling hypervisor.")
 		if err = d.hypervisor.Enable(); err != nil {
 			return err
 		}
+	} else {
+		logger.Info.Println("Hypervisior is in a suitable state.")
 	}
+
 	return nil
 }
 
@@ -83,9 +84,11 @@ func (d drainer) RunPod(*api.Pod, watch.EventType) error{
 
 func main() {
 	daemon := flag.Bool("daemon", false, "run as a daemon")
+	timeOut := flag.Int("time-out", 30, "time out for live-migration")
 	configPath := flag.String("config-path", "config.yaml", "path to configuration file")
 	flag.Parse()
-	hyper, err := nova.New(*configPath)
+
+	hyper, err := nova.New(*configPath, *timeOut)
 	if err != nil {
 		logger.Error.Printf("Cannot create Hypervisor: %v\n", err)
 		os.Exit(1)
@@ -98,7 +101,6 @@ func main() {
 		}
 	} else {
 		d, err := newDrainer(hyper)
-		fmt.Printf("d: %v\n", d)
 		if err != nil {
 			logger.Error.Printf("I cannot create drainer: %v", err)
 			os.Exit(1)
@@ -111,7 +113,7 @@ func main() {
 		}
 
 		if err = kw.Watch(d); err != nil {
-			logger.Error.Printf("Error druing watching: %v", err)
+			logger.Error.Printf("Error during watching: %v", err)
 			os.Exit(1)
 		}
 	}
