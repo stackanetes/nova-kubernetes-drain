@@ -84,7 +84,8 @@ func (d drainer) RunPod(*api.Pod, watch.EventType) error{
 
 func main() {
 	daemon := flag.Bool("daemon", false, "run as a daemon")
-	timeOut := flag.Int("time-out", 30, "time out for live-migration")
+	runOnce := flag.Bool("run-once", false, "run once")
+	timeOut := flag.Int("time-out", 30, "time out for a live-migration")
 	configPath := flag.String("config-path", "config.yaml", "path to configuration file")
 	flag.Parse()
 
@@ -94,12 +95,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !*daemon {
+
+	if *runOnce && *daemon {
+		logger.Warning.Printf("Both '-daemon' and '-run-once' flags passed. You need to pass only one of them.")
+		os.Exit(1)
+	} else if *runOnce {
 		if err = hyper.Disable(); err != nil {
 			logger.Error.Printf("Cannot disable node: %v\n", err)
 			os.Exit(1)
 		}
-	} else {
+	} else if *daemon{
 		d, err := newDrainer(hyper)
 		if err != nil {
 			logger.Error.Printf("I cannot create drainer: %v", err)
@@ -116,5 +121,8 @@ func main() {
 			logger.Error.Printf("Error during watching: %v", err)
 			os.Exit(1)
 		}
+	} else {
+		logger.Warning.Printf("You need to pass '-daemon' or '-run-once' flag.")
+		os.Exit(1)
 	}
 }

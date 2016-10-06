@@ -60,7 +60,7 @@ func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, 
 	if err != nil {
 		return client, fmt.Errorf("Cannot create openstack provider: %v", err)
 	}
-	for a := 1; a < 4; a++ {
+	for a := 1; a < retryNum + 1; a++ {
 		// TODO(DTadrzak): Should break the loop if receive status code == 401
 		client, err = openstack.NewComputeV2(provider, gophercloud.EndpointOpts{})
 		if err == nil {
@@ -91,9 +91,9 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 // GetMyIPAddress returns ip address
 // Based on http://stackoverflow.com/questions/23558425
 func GetMyIPAddress() (string, error) {
-	conn, err := net.Dial("udp", "keystone-api:5000")
+	conn, err := net.Dial("tcp", "keystone-api:5000")
 	if err != nil {
-		return "", fmt.Errorf("Cannot define ip address: %v", err)
+		return "", fmt.Errorf("Cannot get my ip address: %v", err)
 	}
 	defer conn.Close()
 

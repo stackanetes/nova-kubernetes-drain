@@ -2,6 +2,7 @@ package nova
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -17,7 +18,7 @@ const (
 	retryInterval = 2
 	novaComputeBinaryName = "nova-compute"
 	enabledString = "enabled"
-	liveMigrationRetry = 3
+	retryNum = 3
 )
 
 // Service is a struct which represents single Openstack service
@@ -94,10 +95,19 @@ func (n *Hypervisor) novaServices() ([]Service, error) {
 	return nova.Services, err
 }
 func (n *Hypervisor) hypervisorStatus() (bool, error) {
-	services, err := n.novaServices()
+	var err error
+	var services []Service
+
+	for a := 0; a < retryNum; a++ {
+		services, err = n.novaServices()
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return false, fmt.Errorf("Cannot create obtain nova-compute services: %v, err")
 	}
+
 	for _, service := range services {
 		if service.Host == n.hostname && service.Binary == novaComputeBinaryName {
 			if service.Status == enabledString {
@@ -122,28 +132,45 @@ func (n *Hypervisor) RefreshState() (err error) {
 }
 
 // Disable disable node and scheduling on it.
-func (n *Hypervisor) Disable() (err error) {
+func (n *Hypervisor) Disable() error {
+	var resp *http.Response
+	var err error
+
 	url := n.client.ServiceURL("os-services", "disable")
-	resp, err := n.client.Request("PUT", url, gophercloud.RequestOpts{
-		JSONBody: n.body,
-		OkCodes:  []int{200, 204},
-	})
+	for a := 0; a < retryNum; a++ {
+		resp, err = n.client.Request("PUT", url, gophercloud.RequestOpts{
+			JSONBody: n.body,
+			OkCodes:  []int{200, 204},
+		})
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("Cannot change node state. Recieved code: %s.\nError: %v", resp.StatusCode, err)
 	}
+
 	logger.Info.Println("Node disabled.")
 	n.Enabled = false
 
-	return
+	return err
 }
 
 // Enable change node state to enable
 func (n *Hypervisor) Enable() error {
+	var err error
+	var resp *http.Response
+
 	url := n.client.ServiceURL("os-services", "enable")
-	resp, err := n.client.Request("PUT", url, gophercloud.RequestOpts{
-		JSONBody: n.body,
-		OkCodes:  []int{200, 204},
-	})
+	for a := 0; a < retryNum; a++ {
+		resp, err = n.client.Request("PUT", url, gophercloud.RequestOpts{
+			JSONBody: n.body,
+			OkCodes:  []int{200, 204},
+		})
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		logger.Error.Println("Cannot change node state.")
 		return fmt.Errorf("Recieved code: %s.\nError: %v", resp.StatusCode, err)
@@ -155,11 +182,19 @@ func (n *Hypervisor) Enable() error {
 }
 
 func (n *Hypervisor) isMigrated(vmID string, hostID string) (bool, error) {
+	var err error
+	var resp *http.Response
+
 	vm := new(NovaServer)
 	url := n.client.ServiceURL("servers", vmID)
-	resp, err := n.client.Request("GET", url, gophercloud.RequestOpts{
-		OkCodes:  []int{200, 204},
-	})
+	for a := 0; a < retryNum; a++ {
+		resp, err = n.client.Request("GET", url, gophercloud.RequestOpts{
+			OkCodes:  []int{200, 204},
+		})
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return false, fmt.Errorf("Cannot gather server %v information: %v", vmID, err)
 	}
@@ -188,7 +223,7 @@ func (h *Hypervisor) MigrateVMs() (err error) {
 		go func(vmID string, hostID string) {
 			migrated := true
 			defer wg.Done()
-			for a := 1; a < liveMigrationRetry + 1; a++ {
+			for a := 1; a < retryNum + 1; a++ {
 				er := adminactions.LiveMigrate(h.client, vmID, adminactions.LiveMigrateOpts{
 					BlockMigration: true,
 				})

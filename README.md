@@ -1,7 +1,7 @@
 # nova-kubernetes-drain
 
 [![Build Status](https://api.travis-ci.org/stackanetes/nova-kubernetes-drain.svg?branch=master "Build Status")](https://travis-ci.org/stackanetes/nova-kubernetes-drain)
-[![Container Repository on Quay](https://quay.io/repository/stackanetes/nova-kubernetes-drain/status "Container Repository on Quay")](https://quay.io/repository/stackanetes/nova-kubernetes-drain)
+[![Container Repository on Quay](https://quay.io/repository/stackanetes/nova-kubernetes-drain/status "Container Repository on Quay")](https://quay.io/repository/stackanetes/stackanetes-nova-drain)
 [![Go Report Card](https://goreportcard.com/badge/stackanetes/nova-kubernetes-drain "Go Report Card")](https://goreportcard.com/report/stackanetes/nova-kubernetes-drain)
 
 The main goal of Nova-kubernetes-drain is to perform live-evacuation of [OpenStack] compute node when [Kubernetes] node is being drained.
@@ -48,12 +48,12 @@ To run it:
 `./drainer -config-path=<configuration-file-name>`
 
 The application will execute following actions:
- 1. Authorization from the configuration file.
+ 1. Get authorization data from configuration file.
  2. Determine the name of the running hypervisor in [OpenStack].
- 3. Disable scheduling of VMs on this node in [Openstack].
+ 3. Disable scheduling of VMs on this node in [OpenStack].
  4. Identify all VMs on this node.
  5. Trigger a [live-migration].
- 6. Exit the application.
+ 6. Exit the application if all VMs are migrated or timeout is reached.
 
 ## Daemon
 
@@ -62,7 +62,7 @@ To run Nova-kubernetes-drain as a daemon. One has to pass additional `-daemon` f
 `./drainer -daemon -config-path=<configuration-file-name>`
 
 In this mode, the application will wait for specific Kubernetes events to take actions.
-A [Kubernetes] drain operation will make the application disable the scheduling of new VMs and perform live-evacuation of the currently running VMs. On the other hand, a [Kubernetes] uncordon operation will re-enable the scheduling.
+A [Kubernetes] drain operation will disable scheduling of new VMs and perform live-evacuation of the currently running VMs. On the other hand, a [Kubernetes] uncordon operation will re-enable the scheduling.
 
 Lifecycle of the application:
  1. Load [Openstack] authorization variables from file.
