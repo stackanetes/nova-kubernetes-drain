@@ -85,7 +85,7 @@ func (d drainer) RunPod(*api.Pod, watch.EventType) error{
 func main() {
 	daemon := flag.Bool("daemon", false, "run as a daemon")
 	runOnce := flag.Bool("run-once", false, "run once")
-	timeOut := flag.Int("time-out", 30, "time out for a live-migration")
+	timeOut := flag.Int("time-out", 30, "time out for a live-migration, expressed in minutes")
 	configPath := flag.String("config-path", "config.yaml", "path to configuration file")
 	flag.Parse()
 
