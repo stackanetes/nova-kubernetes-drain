@@ -240,7 +240,7 @@ func (h *Hypervisor) MigrateVMs() (err error) {
 			for counter := 0; !migrated ; counter++ {
 				migrated, err = h.isMigrated(vmID, hostID)
 				if err != nil {
-					logger.Warning.Printf("Cannot update VM: %v status.", vmID)
+					logger.Warning.Printf("Cannot update VM: %v status: %v", vmID, err)
 				}
 				if migrated {
 					logger.Info.Printf("VM: %v has been migrated.", vmID)

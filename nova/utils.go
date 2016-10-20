@@ -62,7 +62,9 @@ func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, 
 	}
 	for a := 1; a < retryNum + 1; a++ {
 		// TODO(DTadrzak): Should break the loop if receive status code == 401
-		client, err = openstack.NewComputeV2(provider, gophercloud.EndpointOpts{})
+		client, err = openstack.NewComputeV2(provider, gophercloud.EndpointOpts{
+			Availability: gophercloud.AvailabilityInternal,
+		})
 		if err == nil {
 			return
 		}
